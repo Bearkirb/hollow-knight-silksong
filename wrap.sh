@@ -33,6 +33,36 @@ done
 
 echo "Files to wrap: ${#targets[@]}"
 
+# ---- PASS 1: re-chunk oversized single .b64.js files from earlier runs ----
+# (the raw originals are gone, but the base64 inside the old single-file
+#  wrap is intact: decode it back and split it into chunks)
+for f in StreamingAssets/aa/*.js.b64.js Build/*.b64.js; do
+  [ -f "$f" ] || continue
+  sz=$(stat -c%s "$f")
+  [ "$sz" -le $((CHUNK_B64_BYTES + 4096)) ] && continue
+  echo "RECHUNKING oversized single: $f ($sz bytes)"
+  # extract the base64 payload: everything after the first ]=" up to the final "
+  sed -E 's/^.*\]="//; s/"[[:space:]]*;?[[:space:]]*$//' "$f" > "$f.payload"
+  # figure out the rel key from the file itself
+  rel=$(head -c 400 "$f" | grep -oE '__B64(=window\.__B64\|\|\{\})?\["[^"]+"\]' | head -1 | sed -E 's/.*\["([^"]+)"\]/\1/')
+  echo "  key: $rel"
+  base64 -d "$f.payload" > "$f.raw"
+  rm -f "$f.payload"
+  size=$(stat -c%s "$f.raw")
+  n=0; off=0
+  while [ "$off" -lt "$size" ]; do
+    this=$(( CHUNK_BIN )); if [ $((off + this)) -gt "$size" ]; then this=$((size - off)); fi
+    tail -c +"$((off + 1))" "$f.raw" | head -c "$this" | base64 -w 0 > "$f.chunkb64"
+    b64=$(cat "$f.chunkb64")
+    if [ "$n" -eq 0 ]; then out="$f"; else out="${f%.b64.js}.b64.$n.js"; fi
+    echo "window.__B64C=window.__B64C||{};window.__B64C[\"$rel\"]=window.__B64C[\"$rel\"]||[];window.__B64C[\"$rel\"][$n]=\"$b64\";" > "$out"
+    echo "  chunk $n -> $(du -h "$out" | cut -f1) $out"
+    rm -f "$f.chunkb64"
+    off=$((off + this)); n=$((n + 1))
+  done
+  rm -f "$f.raw"
+done
+
 for f in "${targets[@]}"; do
   [ -f "$f" ] || continue
   case "$f" in *.b64*.js|*.b64.*.js) echo "SKIP $f"; continue;; esac
