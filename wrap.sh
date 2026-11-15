@@ -25,7 +25,6 @@ fi
 targets=()
 targets+=("Build/"*)
 targets+=("StreamingAssets/aa/"WebGL.zip.part*)
-targets+=("StreamingAssets/aa/"WebGL.zip.part*.js 2>/dev/null || true)
 for f in StreamingAssets/aa/*; do
   case "$(basename "$f")" in
     catalog.bin|catalog.hash|settings.json|catalog.bin.js|catalog.hash.js|settings.json.js) targets+=("$f");;
