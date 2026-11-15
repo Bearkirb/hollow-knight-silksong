@@ -1,0 +1,23 @@
+name: Wrap assets
+
+on:
+  workflow_dispatch:
+
+jobs:
+  wrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run wrap script
+        run: bash wrap.sh
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "base64-wrap assets for KA sandbox" || echo "nothing to commit"
+          git push
