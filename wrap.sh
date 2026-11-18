@@ -23,13 +23,14 @@ if [ ! -d "StreamingAssets/aa" ]; then
 fi
 
 targets=()
-targets+=("Build/"*)
-targets+=("StreamingAssets/aa/"WebGL.zip.part*)
-for f in StreamingAssets/aa/*; do
-  case "$(basename "$f")" in
-    catalog.bin|catalog.hash|settings.json|catalog.bin.js|catalog.hash.js|settings.json.js) targets+=("$f");;
-  esac
+shopt -s nullglob
+for f in Build/*; do targets+=("$f"); done
+for f in StreamingAssets/aa/WebGL.zip.part*; do targets+=("$f"); done
+for f in StreamingAssets/aa/WebGL/*.bundle StreamingAssets/aa/WebGL/*.bundle.js StreamingAssets/aa/WebGL/*.js; do targets+=("$f"); done
+for f in StreamingAssets/aa/catalog.bin StreamingAssets/aa/catalog.hash StreamingAssets/aa/settings.json StreamingAssets/aa/catalog.bin.js StreamingAssets/aa/catalog.hash.js StreamingAssets/aa/settings.json.js; do
+  [ -f "$f" ] && targets+=("$f")
 done
+shopt -u nullglob
 
 echo "Files to wrap: ${#targets[@]}"
 
@@ -71,19 +72,23 @@ for f in "${targets[@]}"; do
     StreamingAssets/aa/WebGL.zip.part*) ;;
     StreamingAssets/aa/catalog.bin|StreamingAssets/aa/catalog.hash|StreamingAssets/aa/settings.json) ;;
     StreamingAssets/aa/catalog.bin.js|StreamingAssets/aa/catalog.hash.js|StreamingAssets/aa/settings.json.js) ;;
+    StreamingAssets/aa/WebGL/*.bundle|StreamingAssets/aa/WebGL/*.bundle.js|StreamingAssets/aa/WebGL/*.js) ;;
     *) echo "SKIP $f"; continue;;
   esac
 
   rel="${f#./}"
-  # The repo went through a rename pass: raw binaries now carry a .js
-  # extension (WebGL.zip.part1.js, w-pt.data.unityweb.js, catalog.bin.js...).
-  # Strip the trailing .js so the registry key is the ORIGINAL path the
-  # engine asks for.
-  case "$rel" in
-    *.unityweb.js|*.part[0-9].js|*.part[0-9][0-9].js|catalog.bin.js|catalog.hash.js|settings.json.js)
-      rel="${rel%.js}" ;;
-  esac
-  echo "Wrapping $rel ..."
+  # Strip rename-pass artifacts to get the ENGINE-facing original path:
+  #   *.bundle.js -> *.bundle      (loose bundles renamed by the early pass)
+  #   catalog.bin.js -> catalog.bin (same idea)
+  #   *.unityweb.js -> *.unityweb
+  while :; do
+    case "$rel" in
+      *.bundle.js|catalog.bin.js|catalog.hash.js|settings.json.js|*.unityweb.js)
+        rel="${rel%.js}" ;;
+      *) break ;;
+    esac
+  done
+  echo "Wrapping $rel (from $f) ..."
 
   work="$f.raw"
   if [[ "$rel" == *.unityweb ]]; then
